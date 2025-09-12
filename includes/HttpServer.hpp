@@ -4,7 +4,7 @@
 #include <Arduino.h>
 #include <ESPAsyncWebServer.h>
 
-#include "../includes/Database.hpp"
+#include "../includes/FileSystem.hpp"
 #include "../includes/FirebaseOperations.hpp"
 
 using UserToGPIO = std::map<String, String>;
@@ -31,6 +31,8 @@ private:
     static void rebootDeviceHandler_GET(AsyncWebServerRequest* request);
     static void servePage(AsyncWebServerRequest* request, const String& filename);
     static void notFoundHandler_GET(AsyncWebServerRequest* request);
+    static void otaUpdateCheckHandler_GET(AsyncWebServerRequest* request);
+    static void otaUpdateDownloadHandler_GET(AsyncWebServerRequest* request);
 
     // APIs
     static void unlockHandler_GET(AsyncWebServerRequest* request);
@@ -39,7 +41,7 @@ private:
     static void lockController_POST(AsyncWebServerRequest* request, uint8_t* data, size_t length, size_t index, size_t total);
 
     static UserToGPIO users;
-    static CfgDatabase database;
+    static CfgFileSystem configFile;
 };
 
 #endif

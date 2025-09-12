@@ -1,101 +1,42 @@
 #include <LittleFS.h>
 #include <UUID.h>
+#include <VoyagerOTA.hpp>
+#include <cstdint>
 #include <functional>
 
 #include "../includes/AsyncCookieAuthMiddleware.hpp"
 #include "../includes/Config.hpp"
 #include "../includes/CustomAsyncRateLimitMiddleware.hpp"
-#include "../includes/Database.hpp"
+#include "../includes/FileSystem.hpp"
 #include "../includes/FirebaseOperations.hpp"
+#include "../includes/FirmwareUpdateHTMLPage.hpp"
 #include "../includes/HttpServer.hpp"
-#include "../includes/NetworkManager.hpp"
+#include "../includes/NetworkOperationManager.hpp"
+#include "../includes/RTOSTasks.hpp"
+#include "../includes/TaskCorePinController.hpp"
 #include "../includes/WebSocket.hpp"
 
 UserToGPIO HttpServer::users;
-CfgDatabase HttpServer::database;
+CfgFileSystem HttpServer::configFile;
 AsyncWebServer HttpServer::server(80);
 FirebaseOperations HttpServer::firebase;
-TaskHandle_t firebaseTask = nullptr;
+TaskCorePinController taskHandler;
 
 CookieIdGenerator cookie;
-static WiFiNetworkManager network;
+static NetworkOperationManager network;
 static AsyncCookieAuthMiddleware authMiddleware(cookie);
 static CustomAsyncRateLimitMiddleware rateLimitMiddleware;
 
 inline void closeLockers() {
-    for (uint16_t pinNo : GPIOS) {
+    for (std::uint16_t pinNo : GPIOS) {
         digitalWrite(pinNo, HIGH);
     }
 }
 
-void firebaseListenerTask(void* _) {
-    unsigned long previousMillisClient = 0;
-    unsigned long previousMillisFirebase = 0;
-    const unsigned long CLIENT_INTERVAL = 1000;  // 1 sec . . .
-
-#if PROD_MODE
-    const unsigned long FIREBASE_INTERVAL = 600 * 1000;  // 600 seconds (10 minutes) . . .
-#else
-    const unsigned long FIREBASE_INTERVAL = 60 * 1000;  // 60 seconds (1 minute) . . .
-#endif
-
-    for (;;) {
-        unsigned long currentMillis = millis();
-        if ((currentMillis - previousMillisFirebase) >= FIREBASE_INTERVAL) {
-            previousMillisFirebase = currentMillis;
-
-            if (WiFi.status() == WL_CONNECTED) {
-                if (HttpServer::firebase.isAuthenticated()) {
-                    HttpServer::firebase.listenForAuthorizationStatus();
-                }
-            }
-        }
-
-#if EXPERIMENTAL_FEATURE
-        // WebSocket client operations....
-        if ((currentMillis - previousMillisClient) >= CLIENT_INTERVAL) {
-            previousMillisClient = currentMillis;
-
-            ClientManager& manager = webSocket.getClients();
-            for (auto& [clientId, clientInfo] : manager) {
-                if (clientInfo.timeout > 0) {
-                    clientInfo.timeout -= CLIENT_INTERVAL;
-                    webSocket.getWebSocketInstance().text(clientId, String(clientInfo.timeout));
-                    LOGLN("Client ID: " + String(clientId) + " " + clientInfo.email);
-                }
-
-                // disconnect client and close locker...
-                if (clientInfo.timeout <= 0) {
-                    digitalWrite(clientInfo.gpio, HIGH);
-                    webSocket.getWebSocketInstance().close(clientId);
-                }
-            }
-        }
-#endif
-
-        vTaskDelay(pdMS_TO_TICKS(100));
-    }
-}
-
 void HttpServer::start() {
-    users = database.read(CfgFilePath::USERS);
+    users = configFile.read(CfgFilePath::USERS);
     server.begin();
-
-    // [firebase.listen()] is a synchronous
-    // code and we need to execute it independently
-    // in separate task . . .
-    // running on CPU-1
-    const uint16_t CORE_ID = 1;
-    const uint16_t TASK_PRIORITY_LEVEL = 1;
-    const uint16_t TASK_STACK_SIZE = 10000;  // 10kb . . . .
-    xTaskCreatePinnedToCore(
-        firebaseListenerTask,
-        "firebase-listener-task",
-        TASK_STACK_SIZE,
-        nullptr,
-        TASK_PRIORITY_LEVEL,
-        &firebaseTask,
-        CORE_ID);
+    taskHandler.pinTaskToCPUCore(RTOSTask::firebaseListenerTask);
 }
 
 void HttpServer::setupRoutes() {
@@ -111,7 +52,7 @@ void HttpServer::setupRoutes() {
     using Method = WebRequestMethod;
     using RequestCallback = std::function<void(AsyncWebServerRequest*)>;
     using RouteDefinition = std::tuple<Uri, Method, RequestCallback, AsyncMiddleware*>;
-    const uint16_t TOTAL_ROUTES = 14;
+    const std::uint16_t TOTAL_ROUTES = 16;
 
     const std::array<RouteDefinition, TOTAL_ROUTES> routes = {
         std::make_tuple("/", HTTP_GET, loginHandler_GET, &rateLimitMiddleware),
@@ -119,6 +60,8 @@ void HttpServer::setupRoutes() {
         std::make_tuple("/users", HTTP_GET, usersHandler_GET, &authMiddleware),
         std::make_tuple("/users", HTTP_POST, usersHandler_POST, &authMiddleware),
         std::make_tuple("/device-wifi", HTTP_GET, deviceWifiHandler_GET, &authMiddleware),
+        std::make_tuple("/device/update/download", HTTP_GET, otaUpdateDownloadHandler_GET, &rateLimitMiddleware),
+        std::make_tuple("/device/update", HTTP_GET, otaUpdateCheckHandler_GET, &authMiddleware),
         std::make_tuple("/device-wifi", HTTP_POST, deviceWifiHandler_POST, &authMiddleware),
         std::make_tuple("/home-wifi", HTTP_GET, homeWifiHandler_GET, &authMiddleware),
         std::make_tuple("/home-wifi", HTTP_POST, homeWifiHandler_POST, &authMiddleware),
@@ -130,15 +73,57 @@ void HttpServer::setupRoutes() {
         std::make_tuple("/api/device/reboot", HTTP_GET, rebootEndpointHandler_GET, &rateLimitMiddleware)};
 
     for (const auto& [uri, method, handler, middleware] : routes) {
-        server
-            .on(uri, method, handler)
-            .addMiddleware(const_cast<AsyncMiddleware*>(middleware));
+        server.on(uri, method, handler).addMiddleware(const_cast<AsyncMiddleware*>(middleware));
     }
-
     // protected endpoint for only client side applications . . .
     server.on("/api/locks/unlock", HTTP_POST, [](AsyncWebServerRequest* request) -> void {}, nullptr, lockController_POST);
 
     server.onNotFound(notFoundHandler_GET);
+}
+
+void HttpServer::otaUpdateCheckHandler_GET(AsyncWebServerRequest* request) {
+    Voyager::OTA<> ota(Device::FIRMWARE_VERSION);
+    ota.setEnvironment(Voyager::Environment::PRODUCTION);
+    ota.setGlobalHeaders({
+        {"x-api-key", AuthKeys::VOYAGER_PROJECT_API_KEY},
+        {"x-project-id", AuthKeys::VOYAGER_PROJECT_ID},
+    });
+
+    if (!NetworkOperationManager::hasFoundInternet()) {
+        HTML_NO_INTERNET_UPDATE_PAGE.replace("[[currentVersion]]", String(Device::FIRMWARE_VERSION));
+        request->send(StatusCode::SERVICE_UNREACHABLE, ContentType::HTML, HTML_NO_INTERNET_UPDATE_PAGE);
+        return;
+    }
+
+    std::optional<Voyager::VoyagerReleaseModel> release = ota.fetchLatestRelease();
+    if (!release || release->statusCode == StatusCode::NOT_FOUND) {
+        HTML_FIRMWARE_NO_UPDATE_PAGE.replace("[[currentVersion]]", String(Device::FIRMWARE_VERSION));
+        request->send(StatusCode::NOT_FOUND, ContentType::HTML, HTML_FIRMWARE_NO_UPDATE_PAGE);
+        return;
+    }
+
+    if (release && ota.isNewVersion(release->version)) {
+        String updateHTMLPage = HTML_FIRMWARE_NEW_UPDATE_PAGE;
+        updateHTMLPage.replace("[[newVersion]]", release->version);
+        updateHTMLPage.replace("[[currentVersion]]", ota.getCurrentVersion());
+        updateHTMLPage.replace("[[changeLog]]", release->changeLog);
+        updateHTMLPage.replace("[[releasedDate]]", release->releasedDate);
+        updateHTMLPage.replace("[[downloadFileSize]]", release->prettyFileSize);
+        request->send(StatusCode::OK_CODE, ContentType::HTML, updateHTMLPage);
+    } else if (release->statusCode == HTTP_CODE_OK) {
+        HTML_FIRMWARE_NO_UPDATE_PAGE.replace("[[currentVersion]]", String(Device::FIRMWARE_VERSION));
+        request->send(StatusCode::NOT_FOUND, ContentType::HTML, HTML_FIRMWARE_NO_UPDATE_PAGE);
+    } else {
+        request->send(StatusCode::SERVICE_UNREACHABLE, ContentType::HTML, "Service not reachable to Voyager OTA Service.");
+    }
+}
+
+void HttpServer::otaUpdateDownloadHandler_GET(AsyncWebServerRequest* request) {
+    request->send(StatusCode::OK_CODE, ContentType::HTML, "<h1> Starting Update . . .  </h1>");
+    request->onDisconnect([]() -> void {
+        TaskCorePinController controller;
+        controller.pinTaskToCPUCore(RTOSTask::otaUpdateHandlerTask);
+    });
 }
 
 void HttpServer::loginHandler_GET(AsyncWebServerRequest* request) {
@@ -191,9 +176,9 @@ void HttpServer::loginHandler_POST(AsyncWebServerRequest* request) {
     passwordArgument.trim();
 
     String currentPassword = ESP_ADMIN_WEB_AUTH_PWD;
-    Cfg loginPassword = database.read(CfgFilePath::LOGIN);
+    CfgFormat loginPassword = configFile.read(CfgFilePath::LOGIN);
 
-    Cfg::iterator password = loginPassword.find("password");
+    CfgFormat::iterator password = loginPassword.find("password");
     if (password != loginPassword.end()) {
         auto& [_, customPassword] = *password;
         customPassword.trim();
@@ -217,9 +202,11 @@ void HttpServer::loginHandler_POST(AsyncWebServerRequest* request) {
 void HttpServer::usersHandler_POST(AsyncWebServerRequest* request) {
     LOGLN("Users Configuration!");
 
-    Cfg users;
-    const uint16_t totalArgs = request->args();
-    for (uint16_t i = 0; i < totalArgs; i++) {
+    CfgFormat users;
+    const std::uint16_t totalArgs = request->args();
+    for (std::uint16_t i = 0; i < totalArgs; i++) {
+        // building email_1, email_2 etc named arguments
+        // because these are defined in html forms....
         String email = request->arg("email_" + String(i + 1));
         email.trim();
 
@@ -229,7 +216,7 @@ void HttpServer::usersHandler_POST(AsyncWebServerRequest* request) {
         }
     }
 
-    bool saved = database.write(CfgFilePath::USERS, users);
+    bool saved = configFile.write(CfgFilePath::USERS, users);
     if (!saved) {
         LOGLN("Failed to save users!");
         servePage(request, RouteFilePath::USERS);
@@ -247,11 +234,11 @@ void HttpServer::deviceWifiHandler_POST(AsyncWebServerRequest* request) {
     deviceSSID.trim();
     devicePassword.trim();
 
-    Cfg deviceNetworkConfig;
+    CfgFormat deviceNetworkConfig;
     deviceNetworkConfig.emplace("device_ssid", deviceSSID);
     deviceNetworkConfig.emplace("device_pwd", devicePassword);
 
-    bool saved = database.write(CfgFilePath::DEVICE, deviceNetworkConfig);
+    bool saved = configFile.write(CfgFilePath::DEVICE, deviceNetworkConfig);
 
     if (!saved) {
         LOGLN("Failed to save device wifi configuration");
@@ -270,11 +257,11 @@ void HttpServer::homeWifiHandler_POST(AsyncWebServerRequest* request) {
     homeSSID.trim();
     homePassword.trim();
 
-    Cfg homeNetworkConfig;
+    CfgFormat homeNetworkConfig;
     homeNetworkConfig.emplace("home_ssid", homeSSID);
     homeNetworkConfig.emplace("home_pwd", homePassword);
 
-    bool saved = database.write(CfgFilePath::HOME, homeNetworkConfig);
+    bool saved = configFile.write(CfgFilePath::HOME, homeNetworkConfig);
 
     if (!saved) {
         LOGLN("Failed to save home wifi configuration");
@@ -290,10 +277,10 @@ void HttpServer::changePasswordHandler_POST(AsyncWebServerRequest* request) {
     String password = request->arg("password");
     password.trim();
 
-    Cfg loginCfg;
+    CfgFormat loginCfg;
     loginCfg.emplace("password", password);
 
-    bool saved = database.write(CfgFilePath::LOGIN, loginCfg);
+    bool saved = configFile.write(CfgFilePath::LOGIN, loginCfg);
 
     if (!saved) {
         LOGLN("Failed to save login password!");
@@ -313,7 +300,7 @@ void HttpServer::lockController_POST(AsyncWebServerRequest* request, uint8_t* da
         return;
     }
 
-    if (!network.isConnectedToInternet()) {
+    if (!network.isWiFiConnected() && !NetworkOperationManager::hasFoundInternet()) {
         request->send(StatusCode::FORBIDDEN, ContentType::PLAIN, ResponseMessage::NETWORK_CONFIGURTION_REQUIRED);
         return;
     }
@@ -340,7 +327,7 @@ void HttpServer::lockController_POST(AsyncWebServerRequest* request, uint8_t* da
         email += static_cast<char>(data[i]);
     }
 
-    Cfg::iterator it = users.find(email);
+    CfgFormat::iterator it = users.find(email);
 
     if (it == users.end()) {
         email.clear();
@@ -349,7 +336,7 @@ void HttpServer::lockController_POST(AsyncWebServerRequest* request, uint8_t* da
     }
 
     const auto& [_, gpio] = *it;
-    uint16_t pinNo = static_cast<uint16_t>(gpio.toInt());
+    std::uint16_t pinNo = static_cast<std::uint16_t>(gpio.toInt());
 
 #if EXPERIMENTAL_FEATURE
     bool isNew = webSocket.addClient(pinNo, email);
@@ -384,7 +371,7 @@ void HttpServer::unlockHandler_GET(AsyncWebServerRequest* request) {
         return;
     }
 
-    Cfg::iterator it = users.find(email);
+    CfgFormat::iterator it = users.find(email);
 
     if (it == users.end()) {
         request->send(StatusCode::NOT_FOUND, ContentType::PLAIN, ResponseMessage::USER_NOT_FOUND);
@@ -392,7 +379,7 @@ void HttpServer::unlockHandler_GET(AsyncWebServerRequest* request) {
     }
 
     const auto& [_, gpio] = *it;
-    uint16_t pinNo = static_cast<uint16_t>(gpio.toInt());
+    std::uint16_t pinNo = static_cast<std::uint16_t>(gpio.toInt());
     digitalWrite(pinNo, LOW);
     request->send(StatusCode::OK_CODE, ContentType::PLAIN, "Locker " + gpio + " has been unlocked!");
 }
@@ -434,7 +421,7 @@ void HttpServer::healthEndpointHandler_GET(AsyncWebServerRequest* request) {
     unsigned long uptimeDays = uptimeHours / 24;
 
     String log =
-        "Build Version: " + String(FIRMWARE_VERSION) + "\n" +
+        "Build Version: " + String(Device::FIRMWARE_VERSION) + "\n" +
         "RSSI: " + String(WiFi.RSSI()) + "\n" +
         "Uptime: " + String(uptimeDays) + "d " + String(uptimeHours % 24) + "h " + String(uptimeMinutes % 60) + "m " + String(uptimeSeconds % 60) + "s\n" +
         "Wifi Status: " + String(WiFi.status() == WL_CONNECTED ? "Connected" : "Disconnected") + "\n" +
