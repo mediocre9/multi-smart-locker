@@ -1,4 +1,4 @@
+.vscode
 /build
-/includes/secret.hpp
-/backend
-/.vscode
+/includes/Secret.hpp
+*.crt
