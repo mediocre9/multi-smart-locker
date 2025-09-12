@@ -1,18 +1,19 @@
 #ifndef WEB_SOCKET_H
 #define WEB_SOCKET_H
 
-#include <Arduino.h>
 #include <ESPAsyncWebServer.h>
+#include <WString.h>
+#include <cstdint>
 #include <map>
 
 #include "Config.hpp"
-#include "Database.hpp"
+#include "FileSystem.hpp"
 
-using ClientID = uint32_t;
+using ClientID = std::uint32_t;
 
 struct ClientInfo {
-    uint16_t gpio;
-    uint16_t timeout;
+    std::uint16_t gpio;
+    std::uint16_t timeout;
     String email;
 };
 
@@ -21,10 +22,14 @@ using ClientManager = std::map<ClientID, ClientInfo>;
 class WebSocket final {
 public:
     WebSocket() = delete;
+
     explicit WebSocket(const String& channel);
+
     void init();
-    [[nodiscard]] bool addClient(uint16_t gpio, const String& email);
-    void onEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType type, void* arg, uint8_t* data, size_t length);
+
+    [[nodiscard]] bool addClient(std::uint16_t gpio, const String& email);
+
+    void onEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType type, void* arg, std::uint8_t* data, std::size_t length);
 
     [[nodiscard]] AsyncWebSocket& getWebSocketInstance() {
         return _webSocket;
@@ -36,7 +41,7 @@ public:
 
 private:
     String _email;
-    uint16_t _gpio;
+    std::uint16_t _gpio;
     ClientManager _clients;
     AsyncWebSocket _webSocket;
 };

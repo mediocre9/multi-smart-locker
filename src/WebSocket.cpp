@@ -9,8 +9,8 @@ void WebSocket::init() {
                               AsyncWebSocketClient* client,
                               AwsEventType type,
                               void* arg,
-                              uint8_t* data,
-                              size_t length)
+                              std::uint8_t* data,
+                              std::size_t length)
 
                        {
                            this->onEvent(server,
@@ -22,7 +22,7 @@ void WebSocket::init() {
                        });
 }
 
-bool WebSocket::addClient(uint16_t gpio, const String& email) {
+bool WebSocket::addClient(std::uint16_t gpio, const String& email) {
     ClientManager::iterator it = std::find_if(
         _clients.begin(),
         _clients.end(),
@@ -39,11 +39,11 @@ bool WebSocket::addClient(uint16_t gpio, const String& email) {
     return true;
 }
 
-void WebSocket::onEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType type, void* arg, uint8_t* data, size_t length) {
+void WebSocket::onEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType type, void* arg, std::uint8_t* data, std::size_t length) {
     switch (type) {
         case WS_EVT_CONNECT: {
             digitalWrite(_gpio, LOW);
-            uint16_t timeout = 10 * 1000;  // 10 seconds....
+            std::uint16_t timeout = 10 * 1000;  // 10 seconds....
             auto clientInfo = ClientInfo{_gpio, timeout, _email.c_str()};
             _clients.emplace(client->id(), clientInfo);
 
