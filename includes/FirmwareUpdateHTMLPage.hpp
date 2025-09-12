@@ -1,0 +1,10 @@
+#ifndef HTML_FIRMWARE_UPDATE_PAGE_H
+#define HTML_FIRMWARE_UPDATE_PAGE_H
+
+#include <WString.h>
+
+extern String HTML_FIRMWARE_NEW_UPDATE_PAGE;
+extern String HTML_NO_INTERNET_UPDATE_PAGE;
+extern String HTML_FIRMWARE_NO_UPDATE_PAGE;
+
+#endif
