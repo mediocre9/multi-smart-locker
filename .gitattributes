@@ -1,0 +1,5 @@
+data/*.cfg linguist-language=INI
+
+# ignored files.....
+.vscode/* linguist-vendored
+previews/* linguist-vendored
