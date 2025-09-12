@@ -1,11 +1,11 @@
-#include "../includes/Database.hpp"
+#include "../includes/FileSystem.hpp"
 
 #include <LittleFS.h>
 #include <optional>
 
 #include "../includes/Config.hpp"
 
-[[nodiscard]] bool CfgDatabase::write(const String& filename, const Cfg& data) {
+[[nodiscard]] bool CfgFileSystem::write(const String& filename, const CfgFormat& data) {
     File file = LittleFS.open(filename.c_str(), LittleFSFileMode::WRITE);
 
     if (!file) {
@@ -23,8 +23,8 @@
     return true;
 }
 
-[[nodiscard]] Cfg CfgDatabase::read(const String& filename) {
-    Cfg data;
+[[nodiscard]] CfgFormat CfgFileSystem::read(const String& filename) {
+    CfgFormat data;
     File file = LittleFS.open(filename.c_str(), LittleFSFileMode::READ);
 
     if (!file) {
