@@ -3,17 +3,19 @@
 
 #include <WString.h>
 #include <array>
+#include <cstdint>
 #include "./Secret.hpp"
 
-// Serial Communication
-#define BAUD_RATE 9600
-#define FIRMWARE_VERSION "0.2.0"
+struct Device {
+    static inline constexpr const char* FIRMWARE_VERSION = "1.0.0";
+    static inline constexpr const std::uint16_t BAUD_RATE = 9600;
+};
 
 // Prod/Dev Mode Flags
 #define PROD_MODE false
 #define DEV_MODE !(PROD_MODE)
 #define ENABLE_LOGGING !(PROD_MODE)
-#define EXPERIMENTAL_FEATURE false
+#define EXPERIMENTAL_FEATURE true
 
 #if ENABLE_LOGGING
 #define LOG(val) Serial.print(val)
@@ -46,7 +48,7 @@
 #define ESP_ADMIN_WEB_AUTH_USERNAME (LOGIN_USER_SECRET)
 #define ESP_ADMIN_WEB_AUTH_PWD (LOGIN_PASSWORD_SECRET)
 
-// for 12 Lockers...
+// for 10 Lockers...
 #define GPIO4 4
 #define GPIO13 13
 #define GPIO18 18
@@ -57,14 +59,14 @@
 #define GPIO25 25
 #define GPIO26 26
 #define GPIO27 27
-#define GPIO32 32
-#define GPIO33 33
+// #define GPIO32 32
+// #define GPIO33 33
 
-const std::array<uint16_t, 12> GPIOS = {
+const std::array<std::uint16_t, 10> GPIOS = {
     GPIO4, GPIO13, GPIO18,
     GPIO19, GPIO21, GPIO22,
     GPIO23, GPIO25, GPIO26,
-    GPIO27, GPIO32, GPIO33};
+    GPIO27};
 
 enum StatusCode {
     OK_CODE = 200,
@@ -76,6 +78,12 @@ enum StatusCode {
     CONFLICT = 409,
     TOO_MANY_REQUESTS = 429,
     INTERNAL_SERVER_ERROR = 500,
+    SERVICE_UNREACHABLE = 503,
+};
+
+struct MqttTopic {
+    static inline constexpr const char* TELEMETRY = "device-telemetry";
+    static inline constexpr const char* OTA_STATUS = "device-ota-status";
 };
 
 // LittleFS File System Modes...
@@ -94,10 +102,11 @@ struct CfgFilePath {
     static inline constexpr const char* DEVICE = "/device_wifi.cfg";
 };
 
-// Endpoint protection Static API-Keys....
 struct AuthKeys {
     static inline constexpr const char* ADMIN = ADMIN_API_KEY_SECRET;
     static inline constexpr const char* CLIENT = CLIENT_API_KEY_SECRET;
+    static inline constexpr const char* VOYAGER_PROJECT_API_KEY = VOYAGER_PROJECT_API_KEY_SECRET;
+    static inline constexpr const char* VOYAGER_PROJECT_ID = VOYAGER_PROJECT_ID_SECRET;
 };
 
 struct RouteFilePath {
@@ -107,6 +116,7 @@ struct RouteFilePath {
     static inline constexpr const char* CHANGE_PASSWORD = "/change-password.html";
     static inline constexpr const char* DEVICE_WIFI = "/device-wifi.html";
     static inline constexpr const char* RESTART = "/restart.html";
+    static inline constexpr const char* UPDATE = "/update.html";
     static inline constexpr const char* NOT_FOUND = "/404.html";
 };
 
@@ -130,6 +140,7 @@ struct ResponseMessage {
     static inline constexpr const char* NOT_FOUND = "404! Not Found";
     static inline constexpr const char* USER_NOT_FOUND = "User not Found";
     static inline constexpr const char* TOO_MANY_REQUESTS = "Too many requests. Try again Later!";
+    static inline constexpr const char* NO_INTERNET_CONNECTION = "No internet connection available!";
     static inline constexpr const char* REBOOT = "Rebooted!";
 };
 
@@ -154,7 +165,7 @@ struct ResponseMessage {
  *              >>>  authorized: Boolean (Defaults to True)
  *              >>>  contact: Number | String
  */
-#define ORGANIZATION "cusit"
+#define ORGANIZATION ORGANIZATION_NAME_SECRET
 #define RTDB_PATH "/organizations/" + String(ORGANIZATION) + "/authorized"
 
 #endif
