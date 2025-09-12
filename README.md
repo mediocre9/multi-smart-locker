@@ -1,226 +1,292 @@
+# Multi Smart Safe Locker System
+
 ![Platform](https://img.shields.io/badge/platform-ESP32-blue)
 ![WebServer](https://img.shields.io/badge/WebServer-ESPAsyncWebServer-purple)
 ![WebSocket](https://img.shields.io/badge/WebSocket-Integrated-orange)
 ![FreeRTOS](https://img.shields.io/badge/FreeRTOS-Integrated-blue)
 ![Firebase](https://img.shields.io/badge/Firebase-Integrated-yellow)
+![OTA Platform](https://img.shields.io/badge/OTA-Voyager-brightgreen)
 
-# Multi Smart Safe Locker System
-
-> An ESP32 smart locker system designed for secure and efficient access management. It provides a web interface for configuration, email-based user authorization, and seamless unlocking via the **[Smart Link](https://github.com/mediocre9/smart-link)** mobile app, making it ideal for individuals, organizations, and homeowners.
-
-> [!WARNING]  
-> Firmware is under **heavy develpoment** — expect breaking changes across modules.  
-> Existing architecture diagrams are outdated and no longer reflect the current system structure.
-
-## Contents
-
-1. [Features](#1-features)
-2. [System Responses](#2-system-responses)
-3. [System Flow](#3-system-flow)
-    - [System Web Interface Flow](#system-web-interface-flow)
-    - [Smart Link and Firmware System Flow](#smart-link-and-firmware-system-flow)
-4. [Setup](#4-setup)
-    - [Firebase Project Setup](#firebase-project-setup)
-    - [Firmware Configuration](#firmware-configuration)
-    - [Uploading HTML Files](#uploading-html-files)
-5. [Usage](#5-usage)
-    - [Smart Link Integration](#smart-link-integration)
-6. [Admin Panel Web Interface Previews](#6-admin-panel-web-interface-previews)
-7. [Libraries](#7-libraries)
-
-## 1. Features
-
-| **Feature**                         | **Description**                                                                                                                                 |
-| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Remote Setup & Control**          | Seamlessly manage locker settings through the locally hosted ESP32 web interface, providing an easy way to configure the system.                |
-| **Wi-Fi Configuration**             | Admins can configure Wi-Fi SSID and password for quick network setup, ensuring smooth connectivity for the device.                              |
-| **Secure User Authorization**       | Access is granted by adding the Gmail IDs that users used to sign up on the app, ensuring only authorized individuals can unlock the locker.    |
-| **Real-Time Notifications**         | The WebSocket sends real-time timeout notifications to users when the locker is about to auto-lock.                                             |
-| **Firmware Revocation**             | Firebase is only used for firmware-level restrictions for developers.                                                                           |
-| **Individualized Auto-Lock Timers** | Each locker has a unique 20-second auto-lock timer that ensures security by re-locking the locker after each use.                               |
-| **Fingerprint Authentication**      | The app prompts users for fingerprint authentication before submitting their unlock request to the firmware, adding an extra layer of security. |
+> The Multi Smart Safe Locker System is a modular, decentralized locker solution powered by ESP32 microcontrollers. Each ESP32 controls up to 10 lockers, operates independently, and supports local admin control, user management, and remote
+> firmware updates.
+>
+> Users unlock lockers via the [Smart Link](https://github.com/mediocre9/smart-link) mobile app using fingerprint authentication and Gmail login, while devices enforce access using static API keys and real-time Firebase-based revocation checks.
+>
+> The system runs in dual-mode (STA + AP), allowing simultaneous internet connectivity and local access for pairing. Firmware updates are handled through [Voyager OTA](https://www.voyagerota.com), a custom Remote OTA platform offering project-based release management with staging/production support.
 
 ---
 
-## 2. System Responses
+## Table of Contents
 
-| **Type**                            | **Status Code** | **Message**                                                                               |
-| ----------------------------------- | --------------- | ----------------------------------------------------------------------------------------- |
-| **Locker Unlocked**                 | 200             | `Locker (GPIO number i.e 14) has been unlocked.`                                          |
-| **WebSocket connection exists**     | 409             | `Websocket connection is already established!`                                            |
-| **Access Denied**                   | 403             | `Access Denied. Please contact the admin to gain access.`                                 |
-| **Firmware Restrictions**           | 403             | `Locker access is restricted. Contact Developers for further details.`                    |
-| **Network Connection Issues**       | 403             | `Unable to connect. Please contact the admin to configure the system's network settings.` |
-| **Invalid or malformed JWT**        | 401             | `Unauthorized! Code - 2`                                                                  |
-| **JWT signature validation failed** | 401             | `Unauthorized! Code - 3`                                                                  |
-| **Invalid email format**            | 400             | `Invalid email format.`                                                                   |
-| **Invalid token format**            | 400             | `Invalid token format.`                                                                   |
+1. [Features](#features)
+2. [System Architecture](#system-architecture)
+3. [System Responses](#system-responses)
+4. [Setup Guide](#setup-guide)
+5. [Usage Instructions](#usage-instructions)
+6. [Admin Panel Screenshots](#admin-panel-screenshots)
+7. [Libraries Used](#libraries-used)
+8. [Scenario Breakdown](#scenario-breakdown)
 
-## 3. System Flow
+---
 
-### System Web Interface Flow
+## Features
+
+-   [x] Web admin interface for WiFi and user management
+-   [x] Static API key-based access control
+-   [x] Operated by Smart-Link mobile app
+-   [x] Individual-based auto-lock configuration
+-   [x] Firmware revocation support
+-   [x] Remote OTA updates via Voyager OTA platform
+-   [x] Real-time WebSocket timeout updates - **(Experimental)**
+
+> [!WARNING]
+> Real-time Websocket updates are currently behind an `EXPERIMENTAL_FEATURE` flag.
+
+---
+
+## System Architecture
+
+### Admin Interface
 
 ```mermaid
 graph TD
     A[Access Web Interface: 192.168.4.1] --> B[Login Page]
     B --> C{Is Login Successful?}
-
-    %% Login Handling
     C -->|No| B
     C -->|Yes| D[Admin Dashboard]
-
-    %% Admin Settings & Actions
     D --> E[Change Wi-Fi Settings]
     D --> F[Add Authorized User]
     D --> G[Change Web Interface Password]
     D --> H[Reboot Firmware Manually]
     D --> I[Change Device SSID & Password]
-
-    %% Reboot Handling (All settings changes trigger reboot)
     E --> X[System Rebooting Page]
     F --> X
     G --> X
     H --> X
     I --> X
-
-    %% Reboot Success Page
-    X[The system has rebooted successfully! You can now close this page safely.]
-
-    %% Styling
-    style A fill:#ffffff,stroke:#000000,stroke-width:2px,color:#000000
-    style B fill:#f0f0f0,stroke:#000000,stroke-width:2px,color:#000000
-    style C fill:#d9d9d9,stroke:#000000,stroke-width:2px,color:#000000
-    style D fill:#e6e6e6,stroke:#000000,stroke-width:2px,color:#000000
-    style E fill:#e6f7ff,stroke:#000000,stroke-width:2px,color:#000000
-    style F fill:#e6ffe6,stroke:#000000,stroke-width:2px,color:#000000
-    style G fill:#ffffe6,stroke:#000000,stroke-width:2px,color:#000000
-    style H fill:#f0f0f0,stroke:#000000,stroke-width:2px,color:#000000
-    style I fill:#f0f0f0,stroke:#000000,stroke-width:2px,color:#000000
-    style X fill:#ffcc99,stroke:#000000,stroke-width:2px,color:#000000
-
+    X[System reboot complete]
 ```
 
----
-
-### Smart Link and Firmware System Flow
+### Unlock Flow
 
 ```mermaid
 flowchart TD
-    %% Level 1 – Authentication
-    A[Smart Link App] --> B[Fingerprint Authentication Screen]
-    B --> C{Fingerprint Authentication Succeeds?}
-    C -- Yes --> D[Request Sent to Firmware Local Server & WebSocket]
-    C -- No --> N[Show: Locked Out Due to Too Many Attempts. Please Try Again Later.]
+    A[Smart Link App] --> B[Fingerprint Scan]
+    B --> C{Success?}
+    C -- Yes --> D[Send API Request to Firmware]
+    C -- No --> N[Too Many Failed Attempts]
     N --> B
 
-    %% Level 2 – Connectivity Check
-    D --> O{Is Firmware Connected to Internet?}
-    O -- No --> X[Show: Unable to Connect. Please Contact the Admin to Configure the System's Network Settings.]
+    D --> O{Device Online?}
+    O -- No --> X[Device Offline Message]
     X --> B
-    O -- Yes --> F[Check Firebase Authorization for Firmware]
+    O -- Yes --> F[Check Firebase Flag]
 
-    %% Level 3 – Firebase Authorization
-    F -- Not Authorized --> G[Show: Locker Access is Restricted. Contact Developers for Further Details.]
+    F -- Restricted --> G[Access Denied Message]
     G --> B
-    F -- Authorized --> H[Verify JWT Signature in Request]
+    F -- Allowed --> H[Validate Static API Key]
 
-    %% Level 4 – JWT Verification
-    H --> I{Is JWT Valid?}
-    I -- Yes --> J[Check User Authorization in Firmware]
-    I -- No --> K{Is error due to JWT Signature Issue?}
-    K -- Yes --> M[Show: Unauthorized! - Code 3]
-    K -- No --> L[Show: Unauthorized! - Code 2]
-    M --> B
-    L --> B
-
-    %% Level 5 – User Authorization
-    J --> Q{User Authorized?}
-    Q -- Yes --> R[Unlock Locker]
-    Q -- No --> Y[Show: Access Denied]
+    H --> Q{Authorized?}
+    Q -- Yes --> R[Unlock GPIO]
+    Q -- No --> Y[Access Denied Message]
     Y --> B
 
-    %% Level 6 – Locker Operation
-    R --> S[Start Timer for User]
-    S --> T[Locker Countdown 20s for User]
-    T --> U[Locker Auto-Locks or User Locks Locker]
-    U --> B
-
-    %% Styling
-    style A fill:#ffffff,stroke:#000000,stroke-width:2px,color:#000000
-    style B fill:#f0f0f0,stroke:#000000,stroke-width:2px,color:#000000
-    style C fill:#d9d9d9,stroke:#000000,stroke-width:2px,color:#000000
-    style D fill:#e6e6e6,stroke:#000000,stroke-width:2px,color:#000000
-    style N fill:#ff6666,stroke:#000000,stroke-width:2px,color:#000000
-    style O fill:#ffcc99,stroke:#000000,stroke-width:2px,color:#000000
-    style X fill:#ff9999,stroke:#000000,stroke-width:2px,color:#000000
-    style F fill:#f9f9f9,stroke:#000000,stroke-width:2px,color:#000000
-    style G fill:#ffcccc,stroke:#000000,stroke-width:2px,color:#000000
-    style H fill:#f2f2f2,stroke:#000000,stroke-width:2px,color:#000000
-    style I fill:#cccccc,stroke:#000000,stroke-width:2px,color:#000000
-    style K fill:#ffcc99,stroke:#000000,stroke-width:2px,color:#000000
-    style M fill:#ffcccc,stroke:#000000,stroke-width:2px,color:#000000
-    style L fill:#ffcccc,stroke:#000000,stroke-width:2px,color:#000000
-    style J fill:#f2f2f2,stroke:#000000,stroke-width:2px,color:#000000
-    style Q fill:#cccccc,stroke:#000000,stroke-width:2px,color:#000000
-    style Y fill:#ffcccc,stroke:#000000,stroke-width:2px,color:#000000
-    style R fill:#c1e6c1,stroke:#000000,stroke-width:2px,color:#000000
-    style S fill:#ffffb3,stroke:#000000,stroke-width:2px,color:#000000
-    style T fill:#ffeb99,stroke:#000000,stroke-width:2px,color:#000000
-    style U fill:#d1f2ff,stroke:#000000,stroke-width:2px,color:#000000
-
+    R --> S[Start Auto-lock Timer]
+    S --> T[Auto-lock or Manual Lock]
+    T --> B
 ```
 
 ---
 
-## 4. Setup
+## System Responses
 
-### Firebase Project Setup
+| Type                         | Code | Message                                                                                   |
+| ---------------------------- | ---- | ----------------------------------------------------------------------------------------- |
+| Locker Unlocked              | 200  | `Locker (GPIO number) has been unlocked.`                                                 |
+| WebSocket Exists             | 409  | `WebSocket already established.`                                                          |
+| Access Denied                | 403  | `Access denied.`                                                                          |
+| Firmware Restricted          | 403  | `Locker access restricted.`                                                               |
+| Network Error                | 403  | `Connection failed. Check network settings.`                                              |
+| Internet Network Error       | 403  | `Unable to connect. Please contact the admin to configure the system's network settings.` |
+| Api Key Allowed Content-Type | 401  | `Allowed Content-Type is text/plain`                                                      |
+| Api Key Not Found            | 400  | `API-Key was not provided!`                                                               |
+| Invalid API Key              | 401  | `Invalid API-Key.`                                                                        |
 
-1. Create a Firebase project and obtain **Firebase Web API Key** and **Realtime Database (RTDB) URL**.
-2. Add these to the [config.hpp](https://github.com/mediocre9/esp-32-smart-safe-locker/blob/main/includes/config.hpp) file:
+---
+
+## Setup Guide
+
+### Firebase Setup
 
 ```cpp
-#define FIREBASE_WEB_API_KEY "<your-firebase-web-api-key>"
-#define FIREBASE_RTDB_REFERENCE_URL "<your-firebase-RTDB-reference-url>"
+#define FIREBASE_WEB_API_KEY "<your-api-key>"
+#define FIREBASE_RTDB_REFERENCE_URL "<your-rtdb-url>"
 ```
 
-### Firmware Configuration
+> [!WARNING]
+> Do not expose Firebase credentials publicly.
 
-Set `REGISTER_ESP_ON_FIREBASE` to `true` in [config.hpp](https://github.com/mediocre9/esp-32-smart-safe-locker/blob/main/includes/config.hpp) for initial device registration. Compile and upload the firmware to the ESP32. After registration, set `REGISTER_ESP_ON_FIREBASE` back to `false`.
+### Initial Boot
 
-### Uploading HTML Files
+1. Set `REGISTER_ESP_ON_FIREBASE` to `true`
+2. Flash the firmware
+3. Reset flag to `false` after first boot
 
-1. Install the [arduino-littlefs-upload](https://github.com/earlephilhower/arduino-littlefs-upload) plugin.
-2. Place the web interface HTML files in the **data** directory.
-3. Use the plugin to upload these files to the ESP32.
+### Web Interface Files
 
-## 5. Usage
+1. Install [arduino-littlefs-upload](https://github.com/earlephilhower/arduino-littlefs-upload)
+2. Place web files in `/data`
+3. Upload with LittleFS plugin
 
-1. Connect to the ESP32 Hotspot.
-2. Access the web interface at `http://192.168.4.1`.
-3. Log in and configure the system.
-4. Enter Wi-Fi credentials.
-5. Add users' email to assign lockers.
+> [!TIP]
+> Make sure you install the correct LittleFS plugin for your environment.
 
-### Smart Link Integration
+---
 
-1. Download the [Smart Link](https://github.com/mediocre9/smart-link) mobile app.
-2. Sign in with a Google account.
-3. Admins must add the same Google account email to the ESP32 for authorization.
+## Usage Instructions
 
-## 6. Admin Panel Web Interface Previews
+### Admin Access
+
+1. Connect to ESP32 Wi-Fi
+2. Visit `http://192.168.4.1`
+3. Configure SSID, password, and authorized users
+
+### Unlock Flow
+
+1. Install [Smart Link](https://github.com/mediocre9/smart-link)
+2. Sign in with Google
+3. Scan fingerprint and request unlock
+4. Firmware validates API key and revocation status of firmware on Firebase
+
+> [!IMPORTANT]
+> The Smart Link app connects to ESP32 via AP mode, but the device must have STA internet for Revocation Status.
+
+---
+
+## Admin Panel Screenshots
 
 <img src="previews/1.png" width="70%">
 <img src="previews/2.png" width="70%">
 <img src="previews/3.png" width="70%">
 <img src="previews/4.png" width="70%">
 <img src="previews/5.png" width="70%">
+<img src="previews/6.png" width="70%">
 
-## 7. Libraries
+---
 
--   LittleFS
--   [Firebase_ESP_Client](https://github.com/mobizt/Firebase-ESP-Client)
+## Libraries Used
+
+-   [Firebase ESP Client](https://github.com/mobizt/Firebase-ESP-Client)
 -   [ESPAsyncWebServer](https://github.com/me-no-dev/ESPAsyncWebServer)
+-   [LittleFS](https://github.com/earlephilhower/arduino-esp8266littlefs-plugin)
 -   [UUID](https://github.com/RobTillaart/UUID)
--   [arduino-littlefs-upload](https://github.com/earlephilhower/arduino-littlefs-upload)
--   [CustomJWT](https://github.com/Ant2000/CustomJWT)
+
+> [!TIP]
+> Voyager OTA SDK and integration docs: [voyagerota.com/api/v1/docs](https://www.voyagerota.com/api/v1/docs)
+
+## Scenario Breakdown
+
+### 1. Basic Concept
+
+Each smart locker cupboard uses **one ESP32 device** which controls up to **10 lockers**. Every ESP32 unit is self-contained and **does not communicate** with others. Even inside the same organization, lockers are isolated.
+
+> [!NOTE]
+> All locker data (user assignments, states) is stored **locally** on each ESP32.
+
+---
+
+### 2. Core Components
+
+-   **Firmware (ESP32):** Controls locker logic, user assignments, access validation, and firmware updates
+-   **Admin Dashboard:** Web UI at `http://192.168.4.1` to configure Wi-Fi, manage users, and check updates
+-   **Smart Link App:** User-facing app with fingerprint auth and Gmail-based identity
+-   **Firebase:** Only used by the firmware for device revocation check
+-   **Voyager OTA:** Platform for remote firmware updates
+
+---
+
+### 3. Admin Controls
+
+-   Add/remove users via Gmail from the local dashboard
+-   Assignment is stored on-device
+-   Admin access does **not require** internet
+
+> [!IMPORTANT]
+> Removing a user instantly disables their access to that locker
+
+---
+
+### 4. Developer Controls
+
+-   **Firmware Revocation:**
+
+    -   If Firebase blocks a device, firmware stops unlocking lockers
+    -   Admin dashboard still works
+
+-   **App User Block:**
+    Developers can block Gmail IDs from using the Smart Link app
+
+---
+
+### 5. Internet Requirement (for Firmware Validation)
+
+ESP32 **needs internet** to poll the revocation status on Firebase.
+
+> [!WARNING]
+> If ESP32 can't reach Firebase, **locker won't open** even if the user is locally authorized.
+
+-   App will notify users of network issue
+-   Admins can still manage the device locally (assign, remove users)
+
+---
+
+### 6. Firmware Updates
+
+-   Admin can check for updates at `192.168.4.1`
+-   If update exists, a changelog is shown
+-   Admin can download and apply updates from dashboard
+
+---
+
+### 7. Voyager OTA Platform
+
+-   Custom OTA platform for ESP32/ESP8266 devices
+-   Uses semantic version diffing and lightweight C++ SDK
+-   Enables easy, remote firmware update management
+
+---
+
+### 8. Example Flow: End-User at Organization A
+
+-   Org A has 2 cupboards, each with 5 lockers and one ESP32
+-   Admin connects to ESP32 via `192.168.4.1`, sets up internet and assigns Gmail to lockers
+-   user signs into the Smart Link app with Gmail
+-   She connects to ESP32’s Wi-Fi and requests unlock
+-   If device passes Firebase check, locker opens
+-   If no internet or revoked, locker remains locked and user gets notified
+
+---
+
+### 9. Visiting Another Organization
+
+-   user goes to Org B with a similar setup
+-   She gives Gmail to new admin
+-   New admin assigns her to a locker on their ESP32
+-   user connects to that ESP32 Wi-Fi
+
+> [!Note]
+> Devices **don’t share data**, so Org B’s ESP32 has **no idea** about user’s history with Org A
+
+---
+
+### 10. Summary
+
+-   Every cupboard = one ESP32
+-   Devices work independently
+-   Admins assign users locally
+-   Users unlock lockers using app + local Wi-Fi
+-   Internet needed for Firebase revocation checks
+-   Developers can revoke devices/users
+-   Firmware updates via Voyager OTA
+
+---
