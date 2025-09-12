@@ -7,25 +7,26 @@
 
 #include "includes/Config.hpp"
 #include "includes/HttpServer.hpp"
-#include "includes/NetworkManager.hpp"
+#include "includes/NetworkOperationManager.hpp"
 #include "includes/WebSocket.hpp"
 
 #if EXPERIMENTAL_FEATURE
 WebSocket webSocket("/locks");
 #endif
-WiFiNetworkManager network;
+
+NetworkOperationManager network;
 
 inline void initializeGPIOS();
 void setupServers();
 
 void setup() {
-    Serial.begin(BAUD_RATE);
+    Serial.begin(Device::BAUD_RATE);
+    LOGLN(Device::FIRMWARE_VERSION);
     initializeGPIOS();
 
     if (!LittleFS.begin()) {
         LOGLN("LittleFS Failed!");
         LOGLN("Restarting . . . ");
-        ESP.restart();
         return;
     }
 
@@ -34,14 +35,28 @@ void setup() {
 
 void loop() {
 #if EXPERIMENTAL_FEATURE
-    if (network.isConnectedToInternet() && HttpServer::firebase.isAuthenticated()) {
-        webSocket.getWebSocketInstance().cleanupClients();
+    if (!network.isWiFiConnected()) {
+        LOGLN("Device has no WiFi connection!");
+        return;
     }
+
+    if (!NetworkOperationManager::hasFoundInternet()) {
+        LOGLN("Device has no internet connection!")
+        return;
+    }
+
+    if (!HttpServer::firebase.isAuthenticated()) {
+        LOGLN("Firebase auth failed!");
+        return;
+    }
+
+    LOGLN("Websocket support is running in experimental mode . . .");
+    webSocket.getWebSocketInstance().cleanupClients();
 #endif
 }
 
 inline void initializeGPIOS() {
-    for (uint16_t pinNo : GPIOS) {
+    for (std::uint16_t pinNo : GPIOS) {
         pinMode(pinNo, OUTPUT);
         digitalWrite(pinNo, HIGH);
     }
@@ -52,7 +67,7 @@ void setupServers() {
     HttpServer::start();
     HttpServer::setupRoutes();
 
-    if (!network.isConnectedToInternet()) {
+    if (!network.isWiFiConnected() && !NetworkOperationManager::hasFoundInternet()) {
         return;
     }
 
