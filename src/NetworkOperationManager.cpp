@@ -1,7 +1,8 @@
-#include "../includes/NetworkManager.hpp"
-#include "../includes/Config.hpp"
 
-void WiFiNetworkManager::setupNetworks() {
+#include "../includes/Config.hpp"
+#include "../includes/NetworkOperationManager.hpp"
+
+void NetworkOperationManager::setupNetworks() {
     LOGLN("\nEstablishing networks . . . .");
     WiFi.mode(WIFI_AP_STA);
 
@@ -37,7 +38,7 @@ void WiFiNetworkManager::setupNetworks() {
     // will be informed via rest-api in [HttpServer::lockController_POST]
     // to provide correct wifi credentials from the web interface admin panel...
     int timeout = 50;
-    LOGLN("Establishing connection to the internet!");
+    LOGLN("Establishing connection to the network!");
     WiFi.begin(homeSSID.c_str(), homePassword.c_str());
     while (WiFi.status() != WL_CONNECTED && timeout > 0) {
         LOG(".");
@@ -46,17 +47,24 @@ void WiFiNetworkManager::setupNetworks() {
     }
 
     if (WiFi.status() != WL_CONNECTED) {
-        LOGLN("\nInternet connection failed! Please provide correct ssid and password.");
+        LOGLN("\nNetwork connection failed! Please provide correct ssid and password.");
         WiFi.disconnect(true);
         WiFi.mode(WIFI_AP);
+        return;
+    }
+
+    LOGLN("\nConnected to home network!");
+
+    if (hasFoundInternet()) {
+        LOGLN("Connected to Internet!");
     }
 }
 
-[[nodiscard]] auto WiFiNetworkManager::_getNetworkConfigs(const char* first, const char* second, const char* filename) -> std::optional<NetworkConfig> {
-    Cfg config = _database.read(filename);
+[[nodiscard]] std::optional<NetworkConfig> NetworkOperationManager::_getNetworkConfigs(const char* first, const char* second, const char* filename) {
+    CfgFormat config = _database.read(filename);
 
-    Cfg::iterator firstIterator = config.find(first);
-    Cfg::iterator secondIterator = config.find(second);
+    CfgFormat::iterator firstIterator = config.find(first);
+    CfgFormat::iterator secondIterator = config.find(second);
 
     if (firstIterator == config.end() || secondIterator == config.end()) {
         return std::nullopt;
@@ -72,6 +80,6 @@ void WiFiNetworkManager::setupNetworks() {
     return std::make_pair(ssid, password);
 }
 
-bool WiFiNetworkManager::isConnectedToInternet() {
+bool NetworkOperationManager::isWiFiConnected() {
     return WiFi.status() == WL_CONNECTED;
 }
