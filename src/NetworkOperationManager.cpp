@@ -1,6 +1,6 @@
 
-#include "../includes/Config.hpp"
 #include "../includes/NetworkOperationManager.hpp"
+#include "../includes/Config.hpp"
 
 void NetworkOperationManager::setupNetworks() {
     LOGLN("\nEstablishing networks . . . .");
@@ -61,7 +61,7 @@ void NetworkOperationManager::setupNetworks() {
 }
 
 [[nodiscard]] std::optional<NetworkConfig> NetworkOperationManager::_getNetworkConfigs(const char* first, const char* second, const char* filename) {
-    CfgFormat config = _database.read(filename);
+    CfgFormat config = _config.read(filename);
 
     CfgFormat::iterator firstIterator = config.find(first);
     CfgFormat::iterator secondIterator = config.find(second);
