@@ -1,3 +1,5 @@
+#define __ENABLE_DEVELOPMENT_MODE__ false
+
 #include <LittleFS.h>
 #include <UUID.h>
 #include <VoyagerOTA.hpp>
@@ -83,11 +85,8 @@ void HttpServer::setupRoutes() {
 
 void HttpServer::otaUpdateCheckHandler_GET(AsyncWebServerRequest* request) {
     Voyager::OTA<> ota(Device::FIRMWARE_VERSION);
-    ota.setEnvironment(Voyager::Environment::PRODUCTION);
-    ota.setGlobalHeaders({
-        {"x-api-key", AuthKeys::VOYAGER_PROJECT_API_KEY},
-        {"x-project-id", AuthKeys::VOYAGER_PROJECT_ID},
-    });
+    ota.setBaseURL(AuthKeys::VOYAGER_BASE_URL);
+    ota.setCredentials(AuthKeys::VOYAGER_PROJECT_ID, AuthKeys::VOYAGER_PROJECT_API_KEY);
 
     if (!NetworkOperationManager::hasFoundInternet()) {
         HTML_NO_INTERNET_UPDATE_PAGE.replace("[[currentVersion]]", String(Device::FIRMWARE_VERSION));
@@ -96,21 +95,16 @@ void HttpServer::otaUpdateCheckHandler_GET(AsyncWebServerRequest* request) {
     }
 
     std::optional<Voyager::VoyagerReleaseModel> release = ota.fetchLatestRelease();
-    if (!release || release->statusCode == StatusCode::NOT_FOUND) {
-        HTML_FIRMWARE_NO_UPDATE_PAGE.replace("[[currentVersion]]", String(Device::FIRMWARE_VERSION));
-        request->send(StatusCode::NOT_FOUND, ContentType::HTML, HTML_FIRMWARE_NO_UPDATE_PAGE);
-        return;
-    }
 
-    if (release && ota.isNewVersion(release->version)) {
+    if (release.has_value() && ota.isNewVersion(release->version)) {
         String updateHTMLPage = HTML_FIRMWARE_NEW_UPDATE_PAGE;
         updateHTMLPage.replace("[[newVersion]]", release->version);
         updateHTMLPage.replace("[[currentVersion]]", ota.getCurrentVersion());
         updateHTMLPage.replace("[[changeLog]]", release->changeLog);
         updateHTMLPage.replace("[[releasedDate]]", release->releasedDate);
-        updateHTMLPage.replace("[[downloadFileSize]]", release->prettyFileSize);
+        updateHTMLPage.replace("[[downloadFileSize]]", release->prettySize);
         request->send(StatusCode::OK_CODE, ContentType::HTML, updateHTMLPage);
-    } else if (release->statusCode == HTTP_CODE_OK) {
+    } else if (release.has_value() && ota.isUpToDate(release->version)) {
         HTML_FIRMWARE_NO_UPDATE_PAGE.replace("[[currentVersion]]", String(Device::FIRMWARE_VERSION));
         request->send(StatusCode::NOT_FOUND, ContentType::HTML, HTML_FIRMWARE_NO_UPDATE_PAGE);
     } else {
