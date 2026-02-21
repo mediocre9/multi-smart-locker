@@ -22,7 +22,7 @@ void WebSocket::init() {
                        });
 }
 
-bool WebSocket::addClient(std::uint16_t gpio, const String& email) {
+[[nodiscard]] bool WebSocket::addClient(std::uint16_t gpio, const String& email) {
     ClientManager::iterator it = std::find_if(
         _clients.begin(),
         _clients.end(),
