@@ -277,12 +277,12 @@ String HTML_FIRMWARE_NEW_UPDATE_PAGE = R"rawliteral(
     </main>
 
     <footer>
-        &copy; CUSIT Makerspace R&D Lab - City University of Science and Information Technology, Peshawar
+       
         <br />
         <small>OTA Updates Powered by</small>
         <small>
-            <a href="https://voyagerota.com/" target="_blank" rel="noopener noreferrer" style="color:#4a90e2; font-weight:600; text-decoration:none; margin-top:6px; display:inline-block; letter-spacing:0.05em;">
-                Voyager OTA
+            <a href="#" target="_blank" rel="noopener noreferrer" style="color:#4a90e2; font-weight:600; text-decoration:none; margin-top:6px; display:inline-block; letter-spacing:0.05em;">
+                VoyagerOTA
             </a>
         </small>
     </footer>
@@ -445,9 +445,9 @@ String HTML_NO_INTERNET_UPDATE_PAGE = R"rawliteral(
   </main>
 
   <footer>
-    &copy; CUSIT Makerspace R&D Lab - City University of Science and Information Technology, Peshawar
+   
     <br />
-    <small>OTA Updates Powered by <a href="https://voyagerota.com/" target="_blank">Voyager OTA</a></small>
+    <small>OTA Updates Powered by <a href="#" target="_blank">VoyagerOTA</a></small>
   </footer>
 </body>
 </html>
@@ -626,12 +626,11 @@ String HTML_FIRMWARE_NO_UPDATE_PAGE = R"rawliteral(
     </main>
 
     <footer>
-        &copy; CUSIT Makerspace R&D Lab - City University of Science and Information Technology, Peshawar
         <br />
         <small>OTA Updates Powered by</small>
         <small>
-            <a href="https://voyagerota.com/" target="_blank" rel="noopener noreferrer" style="color:#4a90e2; font-weight:600; text-decoration:none; margin-top:6px; display:inline-block; letter-spacing:0.05em;">
-                Voyager OTA
+            <a href="#" target="_blank" rel="noopener noreferrer" style="color:#4a90e2; font-weight:600; text-decoration:none; margin-top:6px; display:inline-block; letter-spacing:0.05em;">
+                VoyagerOTA
             </a>
         </small>
     </footer>
