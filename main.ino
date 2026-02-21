@@ -1,5 +1,5 @@
 #if __cplusplus < 201703L
-#error This project requires a compiler of c++ 17 or above.
+  #error This project requires a compiler of c++ 17 or above.
 #endif
 
 #include <Arduino.h>
@@ -22,6 +22,7 @@ void setupServers();
 void setup() {
     Serial.begin(Device::BAUD_RATE);
     LOGLN(Device::FIRMWARE_VERSION);
+
     initializeGPIOS();
 
     if (!LittleFS.begin()) {
@@ -41,7 +42,7 @@ void loop() {
     }
 
     if (!NetworkOperationManager::hasFoundInternet()) {
-        LOGLN("Device has no internet connection!")
+        LOGLN("Device has no internet connection!");
         return;
     }
 
@@ -60,6 +61,7 @@ inline void initializeGPIOS() {
         pinMode(pinNo, OUTPUT);
         digitalWrite(pinNo, HIGH);
     }
+    pinMode(2, OUTPUT);
 }
 
 void setupServers() {
@@ -76,6 +78,7 @@ void setupServers() {
         return;
     }
 
+    digitalWrite(2, 0x1);
 #if EXPERIMENTAL_FEATURE
     webSocket.init();
     HttpServer::server.addHandler(&(webSocket.getWebSocketInstance()));
