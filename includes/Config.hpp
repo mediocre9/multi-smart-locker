@@ -7,22 +7,22 @@
 #include "./Secret.hpp"
 
 struct Device {
-    static inline constexpr const char* FIRMWARE_VERSION = "1.0.0";
+    static inline constexpr const char* FIRMWARE_VERSION = "2.0.0";
     static inline constexpr const std::uint16_t BAUD_RATE = 9600;
 };
 
 // Prod/Dev Mode Flags
-#define PROD_MODE false
+#define PROD_MODE true
 #define DEV_MODE !(PROD_MODE)
 #define ENABLE_LOGGING !(PROD_MODE)
 #define EXPERIMENTAL_FEATURE true
 
 #if ENABLE_LOGGING
-#define LOG(val) Serial.print(val)
-#define LOGLN(val) Serial.println(val)
+  #define LOG(val) Serial.print(val)
+  #define LOGLN(val) Serial.println(val)
 #else
-#define LOG(val)
-#define LOGLN(val)
+  #define LOG(val)
+  #define LOGLN(val)
 #endif
 
 // Flags for Registering and Signing up the ESP on Firebase Cloud
@@ -33,11 +33,11 @@ struct Device {
 #define FIREBASE_RTDB_REFERENCE_URL (REFERENCE_URL_SECRET)
 
 #if DEV_MODE
-#define ESP_FIREBASE_AUTH_EMAIL (AUTH_DEV_EMAIL_SECRET)
-#define ESP_FIREBASE_AUTH_PWD (AUTH_DEV_PASSWORD_SECRET)
+  #define ESP_FIREBASE_AUTH_EMAIL (AUTH_DEV_EMAIL_SECRET)
+  #define ESP_FIREBASE_AUTH_PWD (AUTH_DEV_PASSWORD_SECRET)
 #else
-#define ESP_FIREBASE_AUTH_EMAIL (AUTH_PROD_EMAIL_SECRET)
-#define ESP_FIREBASE_AUTH_PWD (AUTH_PROD_PASSWORD_SECRET)
+  #define ESP_FIREBASE_AUTH_EMAIL (AUTH_PROD_EMAIL_SECRET)
+  #define ESP_FIREBASE_AUTH_PWD (AUTH_PROD_PASSWORD_SECRET)
 #endif
 
 // Network Configuration (defaults) . . . .
@@ -81,11 +81,6 @@ enum StatusCode {
     SERVICE_UNREACHABLE = 503,
 };
 
-struct MqttTopic {
-    static inline constexpr const char* TELEMETRY = "device-telemetry";
-    static inline constexpr const char* OTA_STATUS = "device-ota-status";
-};
-
 // LittleFS File System Modes...
 struct LittleFSFileMode {
     static inline constexpr const char* WRITE = "w";
@@ -107,6 +102,7 @@ struct AuthKeys {
     static inline constexpr const char* CLIENT = CLIENT_API_KEY_SECRET;
     static inline constexpr const char* VOYAGER_PROJECT_API_KEY = VOYAGER_PROJECT_API_KEY_SECRET;
     static inline constexpr const char* VOYAGER_PROJECT_ID = VOYAGER_PROJECT_ID_SECRET;
+    static inline constexpr const char* VOYAGER_BASE_URL = VOYAGER_BASE_URL_SECRET;
 };
 
 struct RouteFilePath {
