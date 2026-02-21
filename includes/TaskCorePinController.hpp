@@ -1,12 +1,15 @@
 #ifndef TASK_CORE_PIN_CONTROLLER_H
 #define TASK_CORE_PIN_CONTROLLER_H
+
 #include <cstdint>
 
 class TaskCorePinController final {
 public:
     TaskCorePinController() = default;
 
-    TaskCorePinController& pinTaskToCPUCore(void (*taskHandler)(void*)) {
+    TaskCorePinController& pinTaskToCPUCore(void (*taskHandler)(void*), std::uint16_t coreId = 1U) {
+        _coreId = coreId;
+
         if (_task != nullptr) {
             vTaskDelete(_task);
             _task = nullptr;
