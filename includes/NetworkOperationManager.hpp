@@ -28,7 +28,7 @@ private:
     [[nodiscard]] std::optional<NetworkConfig> _getNetworkConfigs(const char* first, const char* second, const char* filename);
 
 private:
-    CfgFileSystem _database;
+    CfgFileSystem _config;
 };
 
 #endif
