@@ -1,7 +1,8 @@
 #ifndef RTOS_TASK_H
 #define RTOS_TASK_H
 
-#include <ArduinoJson.h>
+#define __ENABLE_DEVELOPMENT_MODE__ false
+
 #include <VoyagerOTA.hpp>
 #include "../includes/Config.hpp"
 #include "../includes/HttpServer.hpp"
@@ -11,11 +12,8 @@
 namespace RTOSTask {
     void otaUpdateHandlerTask(void* _) {
         Voyager::OTA<> ota(Device::FIRMWARE_VERSION);
-        ota.setEnvironment(Voyager::Environment::PRODUCTION);
-        ota.setGlobalHeaders({
-            {"x-api-key", AuthKeys::VOYAGER_PROJECT_API_KEY},
-            {"x-project-id", AuthKeys::VOYAGER_PROJECT_ID},
-        });
+        ota.setBaseURL(AuthKeys::VOYAGER_BASE_URL);
+        ota.setCredentials(AuthKeys::VOYAGER_PROJECT_ID, AuthKeys::VOYAGER_PROJECT_API_KEY);
 
         if (!NetworkOperationManager::hasFoundInternet()) {
             LOGLN(ResponseMessage::NO_INTERNET_CONNECTION);
@@ -29,8 +27,9 @@ namespace RTOSTask {
         }
 
         if (release && ota.isNewVersion(release->version)) {
+            ota.setDownloadURL(release->downloadURL);
             ota.performUpdate();
-        } else if (release->statusCode == HTTP_CODE_NOT_FOUND) {
+        } else if (release && ota.isUpToDate(release->version)) {
             LOGLN(release->message);
         } else {
             LOGLN(release->message);
