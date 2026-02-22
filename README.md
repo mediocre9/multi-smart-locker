@@ -25,7 +25,7 @@
 
 ## System Architecture
 
-<img src="docs/architecure.png" width="70%">
+<img src="docs/architecture.png" width="100%">
 
 ---
 
