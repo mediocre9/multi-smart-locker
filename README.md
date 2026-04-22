@@ -7,7 +7,7 @@
 
 # Multi Smart Locker Firmware
 
-> Modular ESP32 firmware for managing multiple lockers locally, with optional remote OTA updates and background firmware revocation checks. Each ESP32 manages up to 10 lockers independently, and users unlock only their assigned lockers via a single app, seamlessly across multiple locations without keys or shared credentials.
+> Modular ESP32 firmware for managing multiple lockers locally, with remote OTA updates and background firmware revocation checks. Each ESP32 manages up to 10 lockers independently, and users unlock only their assigned lockers via a single app, seamlessly across multiple locations without keys or shared credentials.
 
 # Table of Contents
 
@@ -84,8 +84,7 @@
 3. Install the official Client OTA library:
 
    * From [Github](https://github.com/mediocre9/VoyagerOTAClient)
-   * From [PlatformIO Registry](https://registry.platformio.org/libraries/mediocre9/Voyager-OTA-Client)
-   * Or via Arduino IDE Library Manager
+   * Or via [Arduino IDE Library Manager](https://www.arduinolibraries.info/libraries/voyager-ota-client)
 4. Configure your firmware: Open [`Config.hpp`](https://github.com/mediocre9/multi-smart-locker/blob/9be1e65998e2a7de73626670d82953bd6ef1bfd/includes/Config.hpp#L103-L104) and define Project ID and API Key.
 
 > [!WARNING]
