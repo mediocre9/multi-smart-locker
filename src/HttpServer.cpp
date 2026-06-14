@@ -1,8 +1,8 @@
-#define __ENABLE_DEVELOPMENT_MODE__ false
+#define __USE_STAGING_CHANNEL__ false
 
 #include <LittleFS.h>
 #include <UUID.h>
-#include <VoyagerOTA.hpp>
+#include <VoyagerOTAClient.h>
 #include <cstdint>
 #include <functional>
 
@@ -84,7 +84,7 @@ void HttpServer::setupRoutes() {
 }
 
 void HttpServer::otaUpdateCheckHandler_GET(AsyncWebServerRequest* request) {
-    Voyager::OTA<> ota(Device::FIRMWARE_VERSION);
+    Voyager::OTA<Voyager::HTTPResponseData, Voyager::VoyagerReleaseModel> ota(Device::FIRMWARE_VERSION);
     ota.setBaseURL(AuthKeys::VOYAGER_BASE_URL);
     ota.setCredentials(AuthKeys::VOYAGER_PROJECT_ID, AuthKeys::VOYAGER_PROJECT_API_KEY);
 
